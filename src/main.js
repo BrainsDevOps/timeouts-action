@@ -4,7 +4,7 @@ const markdownTable = require('./markdown')
 require('dotenv/config')
 const core = require('@actions/core')
 
-async function run() {
+const run = async () => {
   try {
     // Inputs
     const appId =

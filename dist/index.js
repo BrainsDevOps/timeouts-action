@@ -25357,7 +25357,7 @@ const markdownTable = __nccwpck_require__(68)
 __nccwpck_require__(4227)
 const core = __nccwpck_require__(2186)
 
-async function run() {
+const run = async () => {
   try {
     // Inputs
     const appId =
@@ -25485,7 +25485,7 @@ module.exports = {
 /***/ 68:
 /***/ ((module) => {
 
-function markdownTable(data) {
+const markdownTable = data => {
   try {
     if (data.length === 0) return ''
 

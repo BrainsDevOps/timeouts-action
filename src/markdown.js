@@ -1,4 +1,4 @@
-function markdownTable(data) {
+const markdownTable = data => {
   try {
     if (data.length === 0) return ''
 
