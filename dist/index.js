@@ -25497,7 +25497,7 @@ function markdownTable(data) {
       for (const row of dataTable) {
         for (const cell of row) {
           const index = row.indexOf(cell)
-          colWidths[index] = Math.max(colWidths[index], cell.length)
+          colWidths[index] = Math.max(colWidths[index], String(cell).length)
         }
       }
       return colWidths
@@ -25506,7 +25506,7 @@ function markdownTable(data) {
     const padCell = (cell, length) => cell + ' '.repeat(length - cell.length)
 
     const createRow = (row, colWidths) =>
-      `| ${row.map((cell, index) => padCell(cell, colWidths[index])).join(' | ')} |`
+      `| ${row.map((cell, index, hasPadding) => padCell(String(cell), colWidths[index])).join(' | ')} |`
 
     const colWidths = getMaxColumnWidths(data)
     const headerRow = createRow(data[0], colWidths)

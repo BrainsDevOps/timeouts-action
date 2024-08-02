@@ -77,4 +77,31 @@ describe('markdownTable', () => {
 
     expect(markdownTable(data)).toBe(expectedOutput)
   })
+
+  test('should work with various datatypes', () => {
+    const data = [
+      [
+        'Repository',
+        'Workflow Title',
+        'Run number',
+        'Run Id',
+        'Elapsed time (seconds)',
+        'Was stopped'
+      ],
+      [
+        'brainsDevopsOrg/timeout-action',
+        'Timer - Test long running jobs',
+        6,
+        10217133264,
+        76.964,
+        true
+      ]
+    ]
+
+    const expectedOutput = `| Repository                     | Workflow Title                 | Run number | Run Id      | Elapsed time (seconds) | Was stopped |
+| ------------------------------ | ------------------------------ | ---------- | ----------- | ---------------------- | ----------- |
+| brainsDevopsOrg/timeout-action | Timer - Test long running jobs | 6          | 10217133264 | 76.964                 | true        |`
+
+    expect(markdownTable(data)).toBe(expectedOutput)
+  })
 })
