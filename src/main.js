@@ -28,7 +28,7 @@ async function run() {
       }
     }
 
-    //Initialize the app for the rest api calls
+    // Initialize the app for the rest api calls
     const app = new App({ appId, privateKey })
     const { data } = await app.octokit.request('/app')
     console.log('authenticated as %s', data.name)
@@ -65,23 +65,21 @@ async function run() {
           }
         )
         const stopCandidates = runs.data.workflow_runs
-          .filter(workflow_runs =>
-            stoppableStates.includes(workflow_runs.status)
-          )
-          .map(workflow_runs => {
+          .filter(workflowRuns => stoppableStates.includes(workflowRuns.status))
+          .map(workflowRuns => {
             return {
               repository_fullname: repository.full_name,
-              display_title: workflow_runs.display_title,
-              run_number: workflow_runs.run_number,
-              id: workflow_runs.id,
+              display_title: workflowRuns.display_title,
+              run_number: workflowRuns.run_number,
+              id: workflowRuns.id,
               elapsedTimeInSeconds: moment
-                .duration(now - Date.parse(workflow_runs.run_started_at))
+                .duration(now - Date.parse(workflowRuns.run_started_at))
                 .asSeconds()
             }
           })
           .filter(
-            filtered_runs =>
-              filtered_runs.elapsedTimeInSeconds > timeoutMinutes * 60
+            filteredRuns =>
+              filteredRuns.elapsedTimeInSeconds > timeoutMinutes * 60
           )
 
         console.log(
