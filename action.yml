@@ -1,18 +1,27 @@
-name: 'The name of your action here'
-description: 'Provide a description here'
-author: 'Your name or organization here'
+name: 'Timeout action - stop long running workflows'
+description: 'Workflow cleaner to timeout long-running jobs'
+author: 'Juan David Sanchez - DevopsBrains'
 
-# Define your inputs here.
 inputs:
-  milliseconds:
-    description: 'Your input description here'
+  app-id:
+    #    required: true
+    description: 'The app id from the Github App'
+  app-pk:
     required: true
-    default: '1000'
+    description: 'The private key from the Github App'
+  scan-range-days:
+    required: false
+    default: '2'
+    description: 'The scan range in days'
+  timeout-minutes:
+    required: false
+    default: '180'
+    description:
+      'The timeout for workflows in minutes. Defaults to 180 minutes (3 hours)'
 
-# Define your outputs here.
 outputs:
-  time:
-    description: 'Your output description here'
+  report:
+    description: 'A markdown table with the jobs cancelled by the action'
 
 runs:
   using: node20

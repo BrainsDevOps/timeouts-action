@@ -1,4 +1,4 @@
-# Create  a JavaScript Action
+# Create a JavaScript Action
 
 [![GitHub Super-Linter](https://github.com/actions/javascript-action/actions/workflows/linter.yml/badge.svg)](https://github.com/super-linter/super-linter)
 ![CI](https://github.com/actions/javascript-action/actions/workflows/ci.yml/badge.svg)
@@ -78,7 +78,7 @@ inputs, and outputs for your action.
 
 ## Update the Action Code
 
-The [`src/`](./src/) directory is the heart of your action! This contains the
+The [`src/`](./src) directory is the heart of your action! This contains the
 source code that will be run when your action is invoked. You can replace the
 contents of this directory with your own code.
 

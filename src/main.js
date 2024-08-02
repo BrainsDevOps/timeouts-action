@@ -1,24 +1,123 @@
+const { App } = require('octokit')
+const moment = require('moment')
+const markdownTable = require('./markdown')
+require('dotenv/config')
 const core = require('@actions/core')
-const { wait } = require('./wait')
 
-/**
- * The main function for the action.
- * @returns {Promise<void>} Resolves when the action is complete.
- */
 async function run() {
   try {
-    const ms = core.getInput('milliseconds', { required: true })
+    // Inputs
+    const appId =
+      core.getInput('app-id') || process.env.GHA_WORKFLOWS_CLEANER_APP_ID
+    const privateKey =
+      core.getInput('app-pk') || process.env.GHA_WORKFLOWS_CLEANER_PRIVATE_KEY
+    const scanRangeDaysInput = core.getInput('scan-range-days') || '2'
+    const timeoutMinutesInput = core.getInput('timeout-minutes') || '200'
+    const scanRangeDays = Number(scanRangeDaysInput)
+    const timeoutMinutes = Number(timeoutMinutesInput)
 
-    // Debug logs are only output if the `ACTIONS_STEP_DEBUG` secret is true
-    core.debug(`Waiting ${ms} milliseconds ...`)
+    core.info(
+      `Using the following inputs: scanRangeDays ${scanRangeDays}, timeoutMinutes:  ${timeoutMinutes}.`
+    )
 
-    // Log the current timestamp, wait, then log the new timestamp
-    core.debug(new Date().toTimeString())
-    await wait(parseInt(ms, 10))
-    core.debug(new Date().toTimeString())
+    // Constants
+    const stoppableStates = ['in_progress']
+    const githubHeaders = {
+      headers: {
+        'X-GitHub-Api-Version': '2022-11-28'
+      }
+    }
 
-    // Set outputs for other workflow steps to use
-    core.setOutput('time', new Date().toTimeString())
+    //Initialize the app for the rest api calls
+    const app = new App({ appId, privateKey })
+    const { data } = await app.octokit.request('/app')
+    console.log('authenticated as %s', data.name)
+
+    // Initialize time ranges
+    const now = Date.now()
+    const daysAgo = moment()
+      .subtract(Number(scanRangeDays), 'days')
+      .format('YYYY-MM-DD')
+
+    // Prepare the structure for the report
+    const reportHeaders = [
+      'Repository',
+      'Workflow Title',
+      'Run number',
+      'Run Id',
+      'Elapsed time (seconds)',
+      'Was stopped'
+    ]
+    const report = [reportHeaders]
+
+    // Iterate through app installations(repositories) and then through workflows
+    for await (const { installation } of app.eachInstallation.iterator()) {
+      for await (const { octokit, repository } of app.eachRepository.iterator({
+        installationId: installation.id
+      })) {
+        console.log(`Working on ${repository.full_name}`)
+        const runs = await octokit.request(
+          `GET /repos/${repository.full_name}/actions/runs`,
+          {
+            per_page: 100,
+            created: `>${daysAgo}`,
+            ...githubHeaders
+          }
+        )
+        const stopCandidates = runs.data.workflow_runs
+          .filter(workflow_runs =>
+            stoppableStates.includes(workflow_runs.status)
+          )
+          .map(workflow_runs => {
+            return {
+              repository_fullname: repository.full_name,
+              display_title: workflow_runs.display_title,
+              run_number: workflow_runs.run_number,
+              id: workflow_runs.id,
+              elapsedTimeInSeconds: moment
+                .duration(now - Date.parse(workflow_runs.run_started_at))
+                .asSeconds()
+            }
+          })
+          .filter(
+            filtered_runs =>
+              filtered_runs.elapsedTimeInSeconds > timeoutMinutes * 60
+          )
+
+        console.log(
+          `Repo '${repository.full_name}' has '${stopCandidates.length}' stop candidate workflows.`
+        )
+        for (let j = 0; j < stopCandidates.length; j++) {
+          const stoppableRun = stopCandidates[j]
+          try {
+            await octokit.request(
+              `POST /repos/${repository.full_name}/actions/runs/${stoppableRun.id}/cancel`,
+              { ...githubHeaders }
+            )
+            report.push([
+              stoppableRun.repository_fullname,
+              stoppableRun.display_title,
+              stoppableRun.run_number,
+              stoppableRun.id,
+              stoppableRun.elapsedTimeInSeconds,
+              true
+            ])
+          } catch (error) {
+            console.error(error)
+            report.push([
+              stoppableRun.repository_fullname,
+              stoppableRun.display_title,
+              stoppableRun.run_number,
+              stoppableRun.id,
+              stoppableRun.elapsedTimeInSeconds,
+              false
+            ])
+          }
+        }
+      }
+    }
+
+    core.setOutput('report', markdownTable(report))
   } catch (error) {
     // Fail the workflow run if an error occurs
     core.setFailed(error.message)
