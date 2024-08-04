@@ -25505,24 +25505,27 @@ async function getActionRunsForRepo(
   repository,
   workflowsSearchRangeInDays
 ) {
-  const allRuns = []
-  const parameters = {
-    per_page: octokitResultsPerPage,
-    created: `>${workflowsSearchRangeInDays}`,
-    ...githubHeaders
-  }
+  let allRuns = []
+  let page = 1
+  let hasMorePages = true
 
-  for await (const response of octokit.paginate.iterator(
-    `GET /repos/${repository.full_name}/actions/runs`,
-    parameters
-  )) {
-    core.info('fetching workflows page')
-    core.info(response.data)
-    const runs = response.data.workflow_runs
-    core.info(runs)
-    if (runs) {
-      allRuns.push(...runs)
-    }
+  while (hasMorePages) {
+    const response = await octokit.request(
+      `GET /repos/${repository.full_name}/actions/runs`,
+      {
+        per_page: octokitResultsPerPage,
+        page,
+        created: `>${workflowsSearchRangeInDays}`,
+        ...githubHeaders
+      }
+    )
+    core.info('pagination response')
+    core.info(response)
+    allRuns = allRuns.push(response.data.workflow_runs)
+
+    // Check if there are more pages to fetch
+    hasMorePages = response.data.workflow_runs.length === octokitResultsPerPage
+    page++
   }
 
   return allRuns
