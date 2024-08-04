@@ -10,7 +10,11 @@ const run = async () => {
     const appId =
       core.getInput('app-id') || process.env.GHA_WORKFLOWS_CLEANER_APP_ID
     const privateKey =
-      core.getInput('app-pk') || process.env.GHA_WORKFLOWS_CLEANER_PRIVATE_KEY
+      core.getInput('app-pk') ||
+      new Buffer.from(
+        process.env.GHA_WORKFLOWS_CLEANER_PRIVATE_KEY,
+        'base64'
+      ).toString('utf-8')
     const scanRangeDaysInput = core.getInput('scan-range-days') || '2'
     const timeoutMinutesInput = core.getInput('timeout-minutes') || '200'
     const scanRangeDays = Number(scanRangeDaysInput)

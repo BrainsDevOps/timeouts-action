@@ -36,6 +36,6 @@ rebuilt with @vercel/ncc. Use the `npm run build` script
 
 ## Local testing
 
-you can test the code locally by defining your Github appId and private key in
-the a .env file. And example of the expected properties can be found in
-.env.example
+you can test the code locally by defining your Github appId and private key
+(base64 encoded) in the a .env file. An example of the expected properties can
+be found in under src/.env.example. The debug entry point is index.js

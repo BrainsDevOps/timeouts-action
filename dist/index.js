@@ -25363,7 +25363,11 @@ const run = async () => {
     const appId =
       core.getInput('app-id') || process.env.GHA_WORKFLOWS_CLEANER_APP_ID
     const privateKey =
-      core.getInput('app-pk') || process.env.GHA_WORKFLOWS_CLEANER_PRIVATE_KEY
+      core.getInput('app-pk') ||
+      new Buffer.from(
+        process.env.GHA_WORKFLOWS_CLEANER_PRIVATE_KEY,
+        'base64'
+      ).toString('utf-8')
     const scanRangeDaysInput = core.getInput('scan-range-days') || '2'
     const timeoutMinutesInput = core.getInput('timeout-minutes') || '200'
     const scanRangeDays = Number(scanRangeDaysInput)
@@ -25490,6 +25494,7 @@ exports.Reporter = Reporter
 
 const moment = __nccwpck_require__(9623)
 const core = __nccwpck_require__(2186)
+const { error } = __nccwpck_require__(2186)
 
 const githubHeaders = {
   headers: {
@@ -25497,19 +25502,22 @@ const githubHeaders = {
   }
 }
 
-// TODO: restore orginal 100 results per page after testing
-const octokitResultsPerPage = 1
+// TODO: restore original 100 results per page after testing
+const octokitResultsPerPage = 100
 
 async function getActionRunsForRepo(
   octokit,
   repository,
   workflowsSearchRangeInDays
 ) {
-  let allRuns = []
+  const allRuns = []
   let page = 1
   let hasMorePages = true
 
   while (hasMorePages) {
+    core.debug(
+      `fetching action runs for repo ${repository.full_name}, page ${page}`
+    )
     const response = await octokit.request(
       `GET /repos/${repository.full_name}/actions/runs`,
       {
@@ -25519,13 +25527,19 @@ async function getActionRunsForRepo(
         ...githubHeaders
       }
     )
-    core.info('pagination response')
-    core.info(response)
-    allRuns = allRuns.push(response.data.workflow_runs)
 
-    // Check if there are more pages to fetch
-    hasMorePages = response.data.workflow_runs.length === octokitResultsPerPage
-    page++
+    core.info(JSON.stringify(response))
+    if (response.status === 200) {
+      allRuns.push(...response.data.workflow_runs)
+      hasMorePages = allRuns.length < response.data.total_count
+      // Check if there are more pages to fetch
+      page++
+    } else {
+      hasMorePages = false
+      core.error(
+        `error retrieving action runs for repo: ${repository.full_name}`
+      )
+    }
   }
 
   return allRuns
@@ -25562,22 +25576,21 @@ async function stopLongRunningWorkflows(
       // So we retrieve all the workflows in the past X days and then we
       // post-filter on the "stoppable" states
       // TODO: fetch in parallel the "stoppable" states, for efficiency
-      const stopCandidates = runs.data.workflow_runs
-        .filter(workflowRuns => stoppableStates.includes(workflowRuns.status))
-        .map(workflowRuns => {
+      const stopCandidates = runs
+        .filter(run => stoppableStates.includes(run.status))
+        .map(run => {
           return {
             repository_fullname: repository.full_name,
-            display_title: workflowRuns.display_title,
-            run_number: workflowRuns.run_number,
-            id: workflowRuns.id,
+            display_title: run.display_title,
+            run_number: run.run_number,
+            id: run.id,
             elapsedTimeInSeconds: moment
-              .duration(now - Date.parse(workflowRuns.run_started_at))
+              .duration(now - Date.parse(run.run_started_at))
               .asSeconds()
           }
         })
         .filter(
-          filteredRuns =>
-            filteredRuns.elapsedTimeInSeconds > timeoutMinutes * 60
+          filteredRun => filteredRun.elapsedTimeInSeconds > timeoutMinutes * 60
         )
 
       core.info(
@@ -25599,8 +25612,8 @@ async function stopLongRunningWorkflows(
             stoppableRun.elapsedTimeInSeconds,
             true
           ])
-        } catch (error) {
-          core.error(error)
+        } catch (err) {
+          core.error(err)
           reporter.pushDataRow([
             stoppableRun.repository_fullname,
             stoppableRun.display_title,
