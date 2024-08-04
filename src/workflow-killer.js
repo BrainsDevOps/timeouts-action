@@ -1,6 +1,39 @@
 const moment = require('moment/moment')
 const core = require('@actions/core')
 
+const githubHeaders = {
+  headers: {
+    'X-GitHub-Api-Version': '2022-11-28'
+  }
+}
+
+// TODO: restore orginal 100 results per page after testing
+const octokitResultsPerPage = 1
+
+async function getActionRunsForRepo(
+  octokit,
+  repository,
+  workflowsSearchRangeInDays
+) {
+  const allRuns = []
+  const parameters = {
+    per_page: octokitResultsPerPage,
+    created: `>${workflowsSearchRangeInDays}`,
+    ...githubHeaders
+  }
+
+  for await (const response of octokit.paginate.iterator(
+    `GET /repos/${repository.full_name}/actions/runs`,
+    parameters
+  )) {
+    core.info('fetching workflows page')
+    const runs = response.data.workflow_runs
+    allRuns.push(...runs)
+  }
+
+  return allRuns
+}
+
 async function stopLongRunningWorkflows(
   app,
   scanRangeDays,
@@ -10,15 +43,11 @@ async function stopLongRunningWorkflows(
 ) {
   // Initialize time ranges
   const now = Date.now()
+
   // We limit this range not to bring too many workflows
   const workflowsSearchRangeInDays = moment()
     .subtract(scanRangeDays, 'days')
     .format('YYYY-MM-DD')
-  const githubHeaders = {
-    headers: {
-      'X-GitHub-Api-Version': '2022-11-28'
-    }
-  }
 
   // Iterate through app installations(repositories) and then through workflows
   for await (const { installation } of app.eachInstallation.iterator()) {
@@ -26,14 +55,11 @@ async function stopLongRunningWorkflows(
       installationId: installation.id
     })) {
       core.info(`Working on ${repository.full_name}`)
-      // TODO: paginate
-      const runs = await octokit.request(
-        `GET /repos/${repository.full_name}/actions/runs`,
-        {
-          per_page: 100,
-          created: `>${workflowsSearchRangeInDays}`,
-          ...githubHeaders
-        }
+
+      const runs = await getActionRunsForRepo(
+        octokit,
+        repository,
+        workflowsSearchRangeInDays
       )
       // The api doesn't allow to search for more than one state per call
       // So we retrieve all the workflows in the past X days and then we
