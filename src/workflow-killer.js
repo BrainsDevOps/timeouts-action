@@ -27,6 +27,7 @@ async function getActionRunsForRepo(
     parameters
   )) {
     core.info('fetching workflows page')
+    core.info(response.data)
     const runs = response.data.workflow_runs
     core.info(runs)
     if (runs) {
