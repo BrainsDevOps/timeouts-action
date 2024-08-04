@@ -28,7 +28,10 @@ async function getActionRunsForRepo(
   )) {
     core.info('fetching workflows page')
     const runs = response.data.workflow_runs
-    allRuns.push(...runs)
+    core.info(runs)
+    if (runs) {
+      allRuns.push(...runs)
+    }
   }
 
   return allRuns
