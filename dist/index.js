@@ -25352,18 +25352,24 @@ function wrappy (fn, cb) {
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 const { App } = __nccwpck_require__(7467)
-const moment = __nccwpck_require__(9623)
-const markdownTable = __nccwpck_require__(68)
 __nccwpck_require__(4227)
 const core = __nccwpck_require__(2186)
+const { Reporter } = __nccwpck_require__(3719)
+const workflowKiller = __nccwpck_require__(5836)
 
 const run = async () => {
   try {
-    // Inputs
+    // Inputs: Environment variables are used only for local testing
     const appId =
       core.getInput('app-id') || process.env.GHA_WORKFLOWS_CLEANER_APP_ID
     const privateKey =
-      core.getInput('app-pk') || process.env.GHA_WORKFLOWS_CLEANER_PRIVATE_KEY
+      core.getInput('app-pk') ||
+      (process.env.GHA_WORKFLOWS_CLEANER_PRIVATE_KEY
+        ? new Buffer.from(
+            process.env.GHA_WORKFLOWS_CLEANER_PRIVATE_KEY,
+            'base64'
+          ).toString('utf-8')
+        : '')
     const scanRangeDaysInput = core.getInput('scan-range-days') || '2'
     const timeoutMinutesInput = core.getInput('timeout-minutes') || '200'
     const scanRangeDays = Number(scanRangeDaysInput)
@@ -25375,100 +25381,22 @@ const run = async () => {
 
     // Constants
     const stoppableStates = ['in_progress']
-    const githubHeaders = {
-      headers: {
-        'X-GitHub-Api-Version': '2022-11-28'
-      }
-    }
 
     // Initialize the app for the rest api calls
     const app = new App({ appId, privateKey })
-    const { data } = await app.octokit.request('/app')
-    console.log('authenticated as %s', data.name)
 
-    // Initialize time ranges
-    const now = Date.now()
-    const daysAgo = moment()
-      .subtract(Number(scanRangeDays), 'days')
-      .format('YYYY-MM-DD')
+    // Write the outcome of each call to stop a workflow
+    const reporter = new Reporter()
 
-    // Prepare the structure for the report
-    const reportHeaders = [
-      'Repository',
-      'Workflow Title',
-      'Run number',
-      'Run Id',
-      'Elapsed time (seconds)',
-      'Was stopped'
-    ]
-    const report = [reportHeaders]
+    await workflowKiller.stopLongRunningWorkflows(
+      app,
+      scanRangeDays,
+      stoppableStates,
+      timeoutMinutes,
+      reporter
+    )
 
-    // Iterate through app installations(repositories) and then through workflows
-    for await (const { installation } of app.eachInstallation.iterator()) {
-      for await (const { octokit, repository } of app.eachRepository.iterator({
-        installationId: installation.id
-      })) {
-        console.log(`Working on ${repository.full_name}`)
-        const runs = await octokit.request(
-          `GET /repos/${repository.full_name}/actions/runs`,
-          {
-            per_page: 100,
-            created: `>${daysAgo}`,
-            ...githubHeaders
-          }
-        )
-        const stopCandidates = runs.data.workflow_runs
-          .filter(workflowRuns => stoppableStates.includes(workflowRuns.status))
-          .map(workflowRuns => {
-            return {
-              repository_fullname: repository.full_name,
-              display_title: workflowRuns.display_title,
-              run_number: workflowRuns.run_number,
-              id: workflowRuns.id,
-              elapsedTimeInSeconds: moment
-                .duration(now - Date.parse(workflowRuns.run_started_at))
-                .asSeconds()
-            }
-          })
-          .filter(
-            filteredRuns =>
-              filteredRuns.elapsedTimeInSeconds > timeoutMinutes * 60
-          )
-
-        console.log(
-          `Repo '${repository.full_name}' has '${stopCandidates.length}' stop candidate workflows.`
-        )
-        for (let j = 0; j < stopCandidates.length; j++) {
-          const stoppableRun = stopCandidates[j]
-          try {
-            await octokit.request(
-              `POST /repos/${repository.full_name}/actions/runs/${stoppableRun.id}/cancel`,
-              { ...githubHeaders }
-            )
-            report.push([
-              stoppableRun.repository_fullname,
-              stoppableRun.display_title,
-              stoppableRun.run_number,
-              stoppableRun.id,
-              stoppableRun.elapsedTimeInSeconds,
-              true
-            ])
-          } catch (error) {
-            console.error(error)
-            report.push([
-              stoppableRun.repository_fullname,
-              stoppableRun.display_title,
-              stoppableRun.run_number,
-              stoppableRun.id,
-              stoppableRun.elapsedTimeInSeconds,
-              false
-            ])
-          }
-        }
-      }
-    }
-
-    core.setOutput('report', markdownTable(report))
+    core.setOutput('report', reporter.getData())
   } catch (error) {
     // Fail the workflow run if an error occurs
     core.setFailed(error.message)
@@ -25523,6 +25451,186 @@ const markdownTable = data => {
 }
 
 module.exports = markdownTable
+
+
+/***/ }),
+
+/***/ 3719:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+const markdownTable = __nccwpck_require__(68)
+
+const reportHeaders = [
+  'Repository',
+  'Workflow Title',
+  'Run number',
+  'Run Id',
+  'Elapsed time (seconds)',
+  'Was stopped'
+]
+
+class Reporter {
+  constructor() {
+    this.data = [reportHeaders]
+  }
+
+  pushDataRow(row) {
+    this.data.push(row)
+  }
+
+  getData(format = 'markdown') {
+    if (format === 'markdown') {
+      return markdownTable(this.data)
+    }
+    return this.data
+  }
+}
+
+exports.Reporter = Reporter
+
+
+/***/ }),
+
+/***/ 5836:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+const moment = __nccwpck_require__(9623)
+const core = __nccwpck_require__(2186)
+
+const githubHeaders = {
+  headers: {
+    'X-GitHub-Api-Version': '2022-11-28'
+  }
+}
+
+const octokitResultsPerPage = 100
+
+async function getActionRunsForRepo(
+  octokit,
+  repository,
+  workflowsSearchRangeInDays
+) {
+  const allRuns = []
+  let page = 1
+  let hasMorePages = true
+
+  while (hasMorePages) {
+    core.debug(
+      `fetching action runs for repo ${repository.full_name}, page ${page}`
+    )
+    const response = await octokit.request(
+      `GET /repos/${repository.full_name}/actions/runs`,
+      {
+        per_page: octokitResultsPerPage,
+        page,
+        created: `>${workflowsSearchRangeInDays}`,
+        ...githubHeaders
+      }
+    )
+
+    core.info(JSON.stringify(response))
+    if (response.status === 200) {
+      allRuns.push(...response.data.workflow_runs)
+      hasMorePages = allRuns.length < response.data.total_count
+      // Check if there are more pages to fetch
+      page++
+    } else {
+      hasMorePages = false
+      core.error(
+        `error retrieving action runs for repo: ${repository.full_name}`
+      )
+    }
+  }
+
+  return allRuns
+}
+
+async function stopLongRunningWorkflows(
+  app,
+  scanRangeDays,
+  stoppableStates,
+  timeoutMinutes,
+  reporter
+) {
+  // Initialize time ranges
+  const now = Date.now()
+
+  // We limit this range not to bring too many workflows
+  const workflowsSearchRangeInDays = moment()
+    .subtract(scanRangeDays, 'days')
+    .format('YYYY-MM-DD')
+
+  // Iterate through app installations(repositories) and then through workflows
+  for await (const { installation } of app.eachInstallation.iterator()) {
+    for await (const { octokit, repository } of app.eachRepository.iterator({
+      installationId: installation.id
+    })) {
+      core.info(`Working on ${repository.full_name}`)
+
+      const runs = await getActionRunsForRepo(
+        octokit,
+        repository,
+        workflowsSearchRangeInDays
+      )
+      // The api doesn't allow to search for more than one state per call
+      // So we retrieve all the workflows in the past X days and then we
+      // post-filter on the "stoppable" states
+      // TODO: fetch in parallel the "stoppable" states, for efficiency
+      const stopCandidates = runs
+        .filter(run => stoppableStates.includes(run.status))
+        .map(run => {
+          return {
+            repository_fullname: repository.full_name,
+            display_title: run.display_title,
+            run_number: run.run_number,
+            id: run.id,
+            elapsedTimeInSeconds: moment
+              .duration(now - Date.parse(run.run_started_at))
+              .asSeconds()
+          }
+        })
+        .filter(
+          filteredRun => filteredRun.elapsedTimeInSeconds > timeoutMinutes * 60
+        )
+
+      core.info(
+        `Repo '${repository.full_name}' has '${stopCandidates.length}' stop candidate workflows.`
+      )
+
+      for (let j = 0; j < stopCandidates.length; j++) {
+        const stoppableRun = stopCandidates[j]
+        try {
+          await octokit.request(
+            `POST /repos/${repository.full_name}/actions/runs/${stoppableRun.id}/cancel`,
+            { ...githubHeaders }
+          )
+          reporter.pushDataRow([
+            stoppableRun.repository_fullname,
+            stoppableRun.display_title,
+            stoppableRun.run_number,
+            stoppableRun.id,
+            stoppableRun.elapsedTimeInSeconds,
+            true
+          ])
+        } catch (err) {
+          core.error(err)
+          reporter.pushDataRow([
+            stoppableRun.repository_fullname,
+            stoppableRun.display_title,
+            stoppableRun.run_number,
+            stoppableRun.id,
+            stoppableRun.elapsedTimeInSeconds,
+            false
+          ])
+        }
+      }
+    }
+  }
+}
+
+module.exports = {
+  stopLongRunningWorkflows
+}
 
 
 /***/ }),
