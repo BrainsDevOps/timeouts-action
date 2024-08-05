@@ -1,6 +1,5 @@
 const moment = require('moment/moment')
 const core = require('@actions/core')
-const { error } = require('@actions/core')
 
 const githubHeaders = {
   headers: {
@@ -8,7 +7,6 @@ const githubHeaders = {
   }
 }
 
-// TODO: restore original 100 results per page after testing
 const octokitResultsPerPage = 100
 
 async function getActionRunsForRepo(

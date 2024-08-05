@@ -25359,15 +25359,17 @@ const workflowKiller = __nccwpck_require__(5836)
 
 const run = async () => {
   try {
-    // Inputs
+    // Inputs: Environment variables are used only for local testing
     const appId =
       core.getInput('app-id') || process.env.GHA_WORKFLOWS_CLEANER_APP_ID
     const privateKey =
       core.getInput('app-pk') ||
-      new Buffer.from(
-        process.env.GHA_WORKFLOWS_CLEANER_PRIVATE_KEY,
-        'base64'
-      ).toString('utf-8')
+      (process.env.GHA_WORKFLOWS_CLEANER_PRIVATE_KEY
+        ? new Buffer.from(
+            process.env.GHA_WORKFLOWS_CLEANER_PRIVATE_KEY,
+            'base64'
+          ).toString('utf-8')
+        : '')
     const scanRangeDaysInput = core.getInput('scan-range-days') || '2'
     const timeoutMinutesInput = core.getInput('timeout-minutes') || '200'
     const scanRangeDays = Number(scanRangeDaysInput)
@@ -25494,7 +25496,6 @@ exports.Reporter = Reporter
 
 const moment = __nccwpck_require__(9623)
 const core = __nccwpck_require__(2186)
-const { error } = __nccwpck_require__(2186)
 
 const githubHeaders = {
   headers: {
@@ -25502,7 +25503,6 @@ const githubHeaders = {
   }
 }
 
-// TODO: restore original 100 results per page after testing
 const octokitResultsPerPage = 100
 
 async function getActionRunsForRepo(
