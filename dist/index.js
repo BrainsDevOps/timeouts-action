@@ -25528,7 +25528,7 @@ async function getActionRunsForRepo(
       }
     )
 
-    core.info(JSON.stringify(response))
+    core.debug(JSON.stringify(response))
     if (response.status === 200) {
       allRuns.push(...response.data.workflow_runs)
       hasMorePages = allRuns.length < response.data.total_count

@@ -84,7 +84,7 @@ describe('stopLongRunningWorkflows', () => {
 
     expect(core.info).toHaveBeenCalledWith('Working on test/repo')
     expect(mockOctokit.request).toHaveBeenCalledWith(
-      `GET /repos/test/repo/actions/runs`,
+      'GET /repos/test/repo/actions/runs',
       expect.objectContaining({
         per_page: 100,
         page: 1,
@@ -93,7 +93,7 @@ describe('stopLongRunningWorkflows', () => {
     )
 
     expect(mockOctokit.request).toHaveBeenCalledWith(
-      `POST /repos/test/repo/actions/runs/123/cancel`,
+      'POST /repos/test/repo/actions/runs/123/cancel',
       expect.objectContaining({})
     )
 
@@ -140,7 +140,7 @@ describe('stopLongRunningWorkflows', () => {
 
     expect(core.info).toHaveBeenCalledWith('Working on test/repo')
     expect(mockOctokit.request).toHaveBeenCalledWith(
-      `POST /repos/test/repo/actions/runs/123/cancel`,
+      'POST /repos/test/repo/actions/runs/123/cancel',
       expect.objectContaining({})
     )
 
