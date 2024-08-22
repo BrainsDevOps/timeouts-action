@@ -16,3 +16,7 @@ MD030:
 # Code block style
 MD046:
   style: fenced
+
+# Line length: Setting a big number to allow inserting links
+MD013:
+  line_length: 300
