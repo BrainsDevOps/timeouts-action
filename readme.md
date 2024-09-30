@@ -28,6 +28,7 @@ These are the time limits for GitHub and self-hosted runners:
 
 - [GitHub runners](https://docs.github.com/en/actions/administering-github-actions/usage-limits-billing-and-administration#usage-limits)
   - job: 6 hours
+  - workflow: 35 days
 - [Self Hosted Runners](https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/about-self-hosted-runners#usage-limits)
   - job: 5 days
   - workflow: 35 days
