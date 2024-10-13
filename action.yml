@@ -4,7 +4,7 @@ author: 'Juan David Sanchez - DevopsBrains'
 
 inputs:
   app-id:
-    #    required: true
+    required: true
     description: 'The app id from the Github App'
   app-pk:
     required: true
